@@ -1,0 +1,92 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>M3U8 Downloader</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📥</text></svg>">
+</head>
+<body>
+  <div class="app">
+    <!-- Left panel: form -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">M3U8</div>
+        <div>
+          <h1>视频下载器</h1>
+          <p class="brand-sub">NAS Docker Edition</p>
+        </div>
+      </div>
+
+      <form id="jobForm" class="form">
+        <div class="field">
+          <label for="url">M3U8 链接 <span class="required">*</span></label>
+          <input id="url" name="url" type="url" autocomplete="off"
+                 placeholder="https://example.com/video/index.m3u8" required>
+        </div>
+
+        <button id="probeBtn" type="button" class="btn btn-probe">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          探测画质
+        </button>
+
+        <div id="qualityWrap" class="field" style="display:none">
+          <label for="quality">选择画质</label>
+          <select id="quality" name="quality"></select>
+        </div>
+
+        <div class="field">
+          <label for="name">文件名</label>
+          <input id="name" name="name" autocomplete="off" placeholder="video.mp4" value="video.mp4">
+        </div>
+
+        <div class="field">
+          <label for="referer">Referer <span class="optional">可选</span></label>
+          <input id="referer" name="referer" autocomplete="off" placeholder="https://example.com/page">
+        </div>
+
+        <div class="field">
+          <label for="cookie">Cookie <span class="optional">可选</span></label>
+          <input id="cookie" name="cookie" autocomplete="off" placeholder="从浏览器复制 Cookie">
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="submitBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          开始下载
+        </button>
+      </form>
+
+      <div id="health" class="health">正在检查 FFmpeg...</div>
+
+      <footer class="disclaimer">
+        <p><strong>免责声明</strong></p>
+        <p>1. 本工具仅为技术学习与交流用途，不提供任何视频资源或下载链接。</p>
+        <p>2. 用户需自行确保所下载内容的合法性，本工具开发者不对任何因使用本工具产生的侵权行为承担责任。</p>
+        <p>3. 请勿将本工具用于任何违反法律法规的用途，包括但不限于下载盗版、侵权或受 DRM 保护的内容。</p>
+        <p>4. 使用本工具即表示您已阅读并同意以上声明。</p>
+      </footer>
+    </aside>
+
+    <!-- Right panel: jobs -->
+    <main class="main">
+      <div class="toolbar">
+        <h2>下载任务</h2>
+        <div class="toolbar-actions">
+          <button id="clearDone" type="button" class="btn btn-sm btn-ghost" title="清除已完成的任务">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            清除已完成
+          </button>
+          <button id="refresh" type="button" class="btn btn-sm btn-ghost">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            刷新
+          </button>
+        </div>
+      </div>
+      <div id="jobs" class="jobs"></div>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

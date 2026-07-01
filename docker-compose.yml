@@ -1,0 +1,17 @@
+﻿services:
+  m3u8-downloader:
+    build: .
+    container_name: m3u8-downloader
+    ports:
+      - "7860:7860"
+    volumes:
+      - /你的实际路径/downloads:/downloads
+    environment:
+      - DOWNLOAD_DIR=/downloads
+      - PORT=7860
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
