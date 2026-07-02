@@ -75,6 +75,19 @@ def format_speed(bytes_per_sec: float) -> str:
     return f"{bytes_per_sec:.0f} B/s"
 
 
+def format_size(bytes_val: float) -> str:
+    """Format file size with appropriate unit."""
+    if bytes_val <= 0:
+        return "0 B"
+    if bytes_val >= 1073741824:
+        return f"{bytes_val / 1073741824:.2f} GB"
+    if bytes_val >= 1048576:
+        return f"{bytes_val / 1048576:.1f} MB"
+    if bytes_val >= 1024:
+        return f"{bytes_val / 1024:.1f} KB"
+    return f"{bytes_val:.0f} B"
+
+
 def format_seconds(seconds: float) -> str:
     seconds = int(max(0, seconds or 0))
     h, rem = divmod(seconds, 3600)
@@ -269,8 +282,12 @@ def run_image_m3u8(job_id: str, segments: list, total_duration: float, output: P
     if cookie:
         hdrs["Cookie"] = cookie
 
-    # Download all images
+    # Download all images with speed tracking
     downloaded = []
+    total_bytes = 0
+    speed_bytes = 0
+    speed_time = time.time()
+
     for i, seg in enumerate(segments):
         with jobs_lock:
             job_state = jobs.get(job_id, {})
@@ -289,14 +306,32 @@ def run_image_m3u8(job_id: str, segments: list, total_duration: float, output: P
         try:
             req = urllib.request.Request(seg["url"], headers=hdrs)
             with urllib.request.urlopen(req, timeout=30) as resp:
-                img_path.write_bytes(resp.read())
+                data = resp.read()
+                img_path.write_bytes(data)
+                file_size = len(data)
+            total_bytes += file_size
             downloaded.append(img_path)
         except Exception as e:
             append_log(job_id, f"下载第 {i+1} 段失败: {str(e)[:60]}")
             continue
 
+        # Calculate speed every iteration
+        now = time.time()
+        dt = now - speed_time
+        speed_bytes += file_size
+        speed = ""
+        if dt >= 0.5:
+            bps = speed_bytes / dt
+            speed = format_speed(bps)
+            speed_bytes = 0
+            speed_time = now
+
         pct = round((i + 1) / total * 100, 1)
-        set_job(job_id, percent=pct, progress_text=f"下载图片 {i+1}/{total}")
+        size_str = format_size(total_bytes)
+        set_job(job_id, percent=pct,
+                progress_text=f"下载图片 {i+1}/{total} ({size_str})",
+                speed=speed if speed else jobs.get(job_id, {}).get("speed", ""),
+                size=size_str)
 
     if not downloaded:
         append_log(job_id, "没有成功下载任何图片")
@@ -684,6 +719,7 @@ if __name__ == "__main__":
     print(f"[M3U8 Downloader] Download dir: {DOWNLOAD_DIR}")
     print(f"[M3U8 Downloader] FFmpeg: {FFMPEG}")
     app.run(host="0.0.0.0", port=port, threaded=True)
+
 
 
 
