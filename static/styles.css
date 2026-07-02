@@ -253,6 +253,12 @@ select {
 }
 .btn-pause:hover { background: #fbbf24; }
 
+.btn-resume {
+  background: #10b981;
+  color: #fff;
+}
+.btn-resume:hover { background: #34d399; }
+
 .btn-retry {
   background: var(--accent);
   color: #000;
@@ -486,4 +492,5 @@ select {
   color: var(--text-2);
   font-size: 11px;
 }
+
 

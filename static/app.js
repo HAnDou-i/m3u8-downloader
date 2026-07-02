@@ -87,6 +87,7 @@ function renderJobs(jobs) {
             const canCancel = job.status === "running" || job.status === "queued";
       const canRetry = job.status === "error" || job.status === "cancelled" || job.status === "paused";
       const canPause = job.status === "running" || job.status === "queued";
+      const canResume = job.status === "paused";
     
       const canDelete =
         job.status === "done" ||
@@ -153,6 +154,14 @@ function renderJobs(jobs) {
               ? `<button data-retry="${job.id}" class="btn btn-sm btn-retry" type="button">
                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
                    重试
+                 </button>`
+              : ""
+          }
+          ${
+            canResume
+              ? `<button data-resume="${job.id}" class="btn btn-sm btn-resume" type="button">
+                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                   继续下载
                  </button>`
               : ""
           }
@@ -307,6 +316,16 @@ jobsEl.addEventListener("click", async (event) => {
     await refreshJobs();
     return;
   }
+  const resumeBtn = event.target.closest("[data-resume]");
+  if (resumeBtn) {
+    resumeBtn.disabled = true;
+    await api(`/api/jobs/${resumeBtn.dataset.resume}/resume`, {
+      method: "POST",
+      body: "{}",
+    });
+    await refreshJobs();
+    return;
+  }
   const deleteBtn = event.target.closest("[data-delete]");
   if (deleteBtn) {
     if (!confirm("确定删除此任务？")) return;
@@ -337,6 +356,8 @@ refreshBtn.addEventListener("click", refreshJobs);
 refreshHealth();
 refreshJobs();
 setInterval(refreshJobs, 2000);
+
+
 
 
 

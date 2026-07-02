@@ -435,6 +435,22 @@ def pause_job(job_id):
         job["paused"] = True
     return jsonify({"ok": True})
 
+
+@app.post("/api/jobs/<job_id>/resume")
+def resume_job(job_id):
+    with jobs_lock:
+        job = jobs.get(job_id)
+        if not job:
+            return jsonify({"error": "任务不存在"}), 404
+        if job["status"] != "paused":
+            return jsonify({"error": "只能继续已暂停的任务"}), 400
+        job["status"] = "queued"
+        job["progress_text"] = "排队中"
+        job["cancel"] = False
+        job["paused"] = False
+    thread = threading.Thread(target=run_download, args=(job_id,), daemon=True)
+    thread.start()
+    return jsonify({"ok": True})
 @app.post("/api/jobs/<job_id>/cancel")
 def cancel_job(job_id):
     with jobs_lock:
@@ -488,6 +504,7 @@ if __name__ == "__main__":
     print(f"[M3U8 Downloader] Download dir: {DOWNLOAD_DIR}")
     print(f"[M3U8 Downloader] FFmpeg: {FFMPEG}")
     app.run(host="0.0.0.0", port=port, threaded=True)
+
 
 
 
