@@ -245,11 +245,18 @@ def run_download(job_id: str):
 
         for line in process.stderr:
             with jobs_lock:
-                cancelled = jobs.get(job_id, {}).get("cancel")
-            if cancelled or jobs.get(job_id, {}).get("cancel"):
+                job_state = jobs.get(job_id, {})
+                cancelled = job_state.get("cancel")
+                paused = job_state.get("paused")
+            if cancelled:
                 process.terminate()
                 append_log(job_id, "正在取消任务...")
                 break
+            if paused:
+                process.terminate()
+                set_job(job_id, status="paused", progress_text="已暂停")
+                append_log(job_id, "任务已暂停")
+                return
 
             match = time_re.search(line)
             if not match:
@@ -481,5 +488,6 @@ if __name__ == "__main__":
     print(f"[M3U8 Downloader] Download dir: {DOWNLOAD_DIR}")
     print(f"[M3U8 Downloader] FFmpeg: {FFMPEG}")
     app.run(host="0.0.0.0", port=port, threaded=True)
+
 
 
