@@ -208,6 +208,157 @@ def append_log(job_id: str, text: str):
             del logs[:-200]
 
 
+def is_image_m3u8(url: str, referer: str = "", cookie: str = "") -> tuple:
+    """Check if m3u8 contains image segments instead of video ts segments.
+    Returns (is_image, segment_urls, total_duration)."""
+    import urllib.request
+    hdrs = {"User-Agent": user_agent()}
+    if referer:
+        hdrs["Referer"] = referer
+    if cookie:
+        hdrs["Cookie"] = cookie
+    try:
+        req = urllib.request.Request(url, headers=hdrs)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            text = resp.read().decode("utf-8", errors="replace")
+    except Exception:
+        return False, [], 0
+
+    base_url = url.rsplit("/", 1)[0] + "/"
+    lines = text.strip().splitlines()
+    segments = []
+    total_dur = 0.0
+    current_dur = 0.0
+    has_ts = False
+    has_image = False
+
+    for line in lines:
+        line = line.strip()
+        if line.startswith("#EXTINF:"):
+            try:
+                current_dur = float(line.split(":")[1].rstrip(","))
+            except Exception:
+                current_dur = 0.0
+            total_dur += current_dur
+        elif line and not line.startswith("#"):
+            seg_url = line if line.startswith("http") else base_url + line
+            segments.append({"url": seg_url, "duration": current_dur})
+            lower = line.lower()
+            if lower.endswith((".jpeg", ".jpg", ".png", ".webp", ".bmp")):
+                has_image = True
+            elif lower.endswith(".ts") or "ts" in lower:
+                has_ts = True
+            current_dur = 0.0
+
+    return has_image and not has_ts, segments, total_dur
+
+
+def run_image_m3u8(job_id: str, segments: list, total_duration: float, output: Path, referer: str, cookie: str):
+    """Download image segments and concat into a video."""
+    import tempfile
+    import urllib.request
+    import glob as globmod
+
+    tmpdir = Path(tempfile.mkdtemp(prefix="m3u8_img_"))
+    total = len(segments)
+    append_log(job_id, f"检测到图片序列，共 {total} 段")
+
+    hdrs = {"User-Agent": user_agent()}
+    if referer:
+        hdrs["Referer"] = referer
+    if cookie:
+        hdrs["Cookie"] = cookie
+
+    # Download all images
+    downloaded = []
+    for i, seg in enumerate(segments):
+        with jobs_lock:
+            job_state = jobs.get(job_id, {})
+            if job_state.get("cancel"):
+                append_log(job_id, "正在取消任务...")
+                shutil.rmtree(tmpdir, ignore_errors=True)
+                set_job(job_id, status="cancelled", percent=0, progress_text="已取消")
+                return
+            if job_state.get("paused"):
+                append_log(job_id, "任务已暂停")
+                shutil.rmtree(tmpdir, ignore_errors=True)
+                set_job(job_id, status="paused", progress_text="已暂停")
+                return
+
+        img_path = tmpdir / f"frame_{i:05d}.jpeg"
+        try:
+            req = urllib.request.Request(seg["url"], headers=hdrs)
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                img_path.write_bytes(resp.read())
+            downloaded.append(img_path)
+        except Exception as e:
+            append_log(job_id, f"下载第 {i+1} 段失败: {str(e)[:60]}")
+            continue
+
+        pct = round((i + 1) / total * 100, 1)
+        set_job(job_id, percent=pct, progress_text=f"下载图片 {i+1}/{total}")
+
+    if not downloaded:
+        append_log(job_id, "没有成功下载任何图片")
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        set_job(job_id, status="error", progress_text="下载失败：无有效图片")
+        return
+
+    append_log(job_id, f"已下载 {len(downloaded)} 张图片，开始合成视频...")
+
+    # Create concat list for ffmpeg
+    frame_duration = segments[0]["duration"] if segments else 4.0
+    concat_file = tmpdir / "concat.txt"
+    with open(concat_file, "w") as f:
+        for img in downloaded:
+            f.write(f"file '{img}'\n")
+            f.write(f"duration {frame_duration}\n")
+        # Last image needs to be listed again for ffmpeg concat demuxer
+        f.write(f"file '{downloaded[-1]}'\n")
+
+    cmd = [
+        FFMPEG, "-y",
+        "-f", "concat", "-safe", "0",
+        "-i", str(concat_file),
+        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        str(output),
+    ]
+
+    startupinfo = None
+    if os.name == "nt":
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            startupinfo=startupinfo,
+        )
+        set_job(job_id, status="running", progress_text="合成视频中...")
+        process.wait()
+
+        if process.returncode == 0 and output.exists() and output.stat().st_size > 1024:
+            size_mb = output.stat().st_size / 1048576
+            set_job(job_id, status="done", percent=100, progress_text="下载完成",
+                    size=f"{size_mb:.1f} MB", finished_at=time.time())
+            append_log(job_id, f"合成完成：{output.name} ({size_mb:.1f} MB)")
+        else:
+            set_job(job_id, status="error", progress_text="视频合成失败")
+            append_log(job_id, "FFmpeg 合成失败")
+    except Exception as e:
+        set_job(job_id, status="error", progress_text=str(e)[:120])
+        append_log(job_id, f"合成错误：{str(e)[:160]}")
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 def run_download(job_id: str):
     with jobs_lock:
         job = dict(jobs[job_id])
@@ -217,6 +368,12 @@ def run_download(job_id: str):
     cookie = job.get("cookie", "")
     output = Path(job["path"])
     output.parent.mkdir(parents=True, exist_ok=True)
+
+    # Check if this is an image-based m3u8
+    is_image, segments, total_dur = is_image_m3u8(url, referer, cookie)
+    if is_image and segments:
+        run_image_m3u8(job_id, segments, total_dur, output, referer, cookie)
+        return
 
     append_log(job_id, "正在探测视频信息...")
     duration = probe_duration(url, referer, cookie)
@@ -527,6 +684,7 @@ if __name__ == "__main__":
     print(f"[M3U8 Downloader] Download dir: {DOWNLOAD_DIR}")
     print(f"[M3U8 Downloader] FFmpeg: {FFMPEG}")
     app.run(host="0.0.0.0", port=port, threaded=True)
+
 
 
 
