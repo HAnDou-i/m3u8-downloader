@@ -85,7 +85,7 @@ function renderJobs(jobs) {
     .map((job) => {
       const canDownload = job.status === "done";
             const canCancel = job.status === "running" || job.status === "queued";
-      const canRetry = job.status === "error" || job.status === "cancelled";
+      const canRetry = job.status === "error" || job.status === "cancelled" || job.status === "paused";
       const canPause = job.status === "running" || job.status === "queued";
     
       const canDelete =
@@ -337,6 +337,7 @@ refreshBtn.addEventListener("click", refreshJobs);
 refreshHealth();
 refreshJobs();
 setInterval(refreshJobs, 2000);
+
 
 
 

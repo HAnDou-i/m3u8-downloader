@@ -407,8 +407,8 @@ def retry_job(job_id):
         job = jobs.get(job_id)
         if not job:
             return jsonify({"error": "任务不存在"}), 404
-        if job["status"] not in ("error", "cancelled"):
-            return jsonify({"error": "只能重试失败或已取消的任务"}), 400
+        if job["status"] not in ("error", "cancelled", "paused"):
+            return jsonify({"error": "只能重试失败、已取消或已暂停的任务"}), 400
         # Reset job state
         job["status"] = "queued"
         job["percent"] = 0
@@ -488,6 +488,7 @@ if __name__ == "__main__":
     print(f"[M3U8 Downloader] Download dir: {DOWNLOAD_DIR}")
     print(f"[M3U8 Downloader] FFmpeg: {FFMPEG}")
     app.run(host="0.0.0.0", port=port, threaded=True)
+
 
 
 
