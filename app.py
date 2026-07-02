@@ -296,19 +296,23 @@ def run_image_m3u8(job_id: str, segments: list, total_duration: float, output: P
                 chunks = []
                 while True:
                     # Check cancel/pause between chunks
+                    should_stop = False
+                    is_paused = False
                     with jobs_lock:
                         job_state = jobs.get(job_id, {})
                         if job_state.get("cancel") or job_state.get("paused"):
-                            resp.close()
+                            should_stop = True
                             is_paused = job_state.get("paused")
-                            shutil.rmtree(tmpdir, ignore_errors=True)
-                            if is_paused:
-                                append_log(job_id, "任务已暂停")
-                                set_job(job_id, status="paused", progress_text="已暂停")
-                            else:
-                                append_log(job_id, "正在取消任务...")
-                                set_job(job_id, status="cancelled", percent=0, progress_text="已取消")
-                            return
+                    if should_stop:
+                        resp.close()
+                        shutil.rmtree(tmpdir, ignore_errors=True)
+                        if is_paused:
+                            set_job(job_id, status="paused", progress_text="已暂停")
+                            append_log(job_id, "任务已暂停")
+                        else:
+                            set_job(job_id, status="cancelled", percent=0, progress_text="已取消")
+                            append_log(job_id, "正在取消任务...")
+                        return
                     chunk = resp.read(8192)
                     if not chunk:
                         break
@@ -319,10 +323,13 @@ def run_image_m3u8(job_id: str, segments: list, total_duration: float, output: P
             total_bytes += file_size
             downloaded.append(img_path)
         except Exception as e:
+            should_stop = False
             with jobs_lock:
                 if jobs.get(job_id, {}).get("cancel") or jobs.get(job_id, {}).get("paused"):
-                    shutil.rmtree(tmpdir, ignore_errors=True)
-                    return
+                    should_stop = True
+            if should_stop:
+                shutil.rmtree(tmpdir, ignore_errors=True)
+                return
             append_log(job_id, f"下载第 {i+1} 段失败: {str(e)[:60]}")
             continue
 
@@ -730,6 +737,7 @@ if __name__ == "__main__":
     print(f"[M3U8 Downloader] Download dir: {DOWNLOAD_DIR}")
     print(f"[M3U8 Downloader] FFmpeg: {FFMPEG}")
     app.run(host="0.0.0.0", port=port, threaded=True)
+
 
 
 
