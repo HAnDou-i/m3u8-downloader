@@ -53,17 +53,6 @@ function escapeHtml(v) {
   );
 }
 
-function formatSpeed(speed) {
-  if (!speed) return "";
-  // speed from ffmpeg looks like "2.5x" or a number
-  const match = String(speed).match(/([\d.]+)\s*x/);
-  if (match) {
-    const x = parseFloat(match[1]);
-    if (x >= 1) return x.toFixed(1) + "x 实时";
-    return (x * 100).toFixed(0) + "% 实时";
-  }
-  return speed;
-}
 
 function timeAgo(ts) {
   if (!ts) return "";
@@ -114,7 +103,7 @@ function renderJobs(jobs) {
             <strong class="job-name">${escapeHtml(job.name)}</strong>
             <div class="job-meta">
               <span class="badge badge-${job.status}">${statusText(job.status)}</span>
-              ${job.speed ? `<span class="speed">${escapeHtml(formatSpeed(job.speed))}</span>` : ""}
+              ${job.speed ? `<span class="speed">${escapeHtml(job.speed)}</span>` : ""}
               ${job.size ? `<span class="size">${escapeHtml(job.size)}</span>` : ""}
               <span class="time">${timeAgo(job.created_at)}</span>
             </div>
@@ -321,6 +310,7 @@ refreshBtn.addEventListener("click", refreshJobs);
 refreshHealth();
 refreshJobs();
 setInterval(refreshJobs, 2000);
+
 
 
 

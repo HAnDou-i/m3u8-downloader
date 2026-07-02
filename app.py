@@ -64,6 +64,17 @@ def parse_time(value: str) -> float:
         return 0.0
 
 
+def format_speed(bytes_per_sec: float) -> str:
+    """Format download speed with appropriate unit."""
+    if bytes_per_sec <= 0:
+        return ""
+    if bytes_per_sec >= 1048576:
+        return f"{bytes_per_sec / 1048576:.1f} MB/s"
+    if bytes_per_sec >= 1024:
+        return f"{bytes_per_sec / 1024:.1f} KB/s"
+    return f"{bytes_per_sec:.0f} B/s"
+
+
 def format_seconds(seconds: float) -> str:
     seconds = int(max(0, seconds or 0))
     h, rem = divmod(seconds, 3600)
@@ -264,14 +275,22 @@ def run_download(job_id: str):
 
             current = parse_time(match.group(1))
             percent = min(100.0, current / duration * 100) if duration else 0.0
+            # Calculate real download speed from file size growth
             speed = ""
-            speed_match = speed_re.search(line)
-            if speed_match:
-                speed_val = float(speed_match.group(1))
-                if speed_val >= 1:
-                    speed = f"{speed_val:.1f}x"
-                else:
-                    speed = f"{speed_val * 100:.0f}%"
+            if output.exists():
+                now = time.time()
+                cur_size = output.stat().st_size
+                with jobs_lock:
+                    prev_size = jobs.get(job_id, {}).get("_prev_size", 0)
+                    prev_time = jobs.get(job_id, {}).get("_prev_time", 0)
+                if prev_time > 0 and now > prev_time:
+                    dt = now - prev_time
+                    bps = (cur_size - prev_size) / dt
+                    speed = format_speed(bps)
+                with jobs_lock:
+                    if job_id in jobs:
+                        jobs[job_id]["_prev_size"] = cur_size
+                        jobs[job_id]["_prev_time"] = now
             set_job(
                 job_id,
                 current=current,
@@ -508,6 +527,7 @@ if __name__ == "__main__":
     print(f"[M3U8 Downloader] Download dir: {DOWNLOAD_DIR}")
     print(f"[M3U8 Downloader] FFmpeg: {FFMPEG}")
     app.run(host="0.0.0.0", port=port, threaded=True)
+
 
 
 
