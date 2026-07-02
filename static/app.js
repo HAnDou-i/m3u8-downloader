@@ -3,9 +3,6 @@ const jobsEl = document.querySelector("#jobs");
 const healthEl = document.querySelector("#health");
 const refreshBtn = document.querySelector("#refresh");
 const clearDoneBtn = document.querySelector("#clearDone");
-const probeBtn = document.querySelector("#probeBtn");
-const qualityWrap = document.querySelector("#qualityWrap");
-const qualitySel = document.querySelector("#quality");
 const submitBtn = document.querySelector("#submitBtn");
 
 // ---------------------------------------------------------------------------
@@ -148,53 +145,7 @@ async function refreshHealth() {
 }
 
 // ---------------------------------------------------------------------------
-// Probe quality
-// ---------------------------------------------------------------------------
 
-let lastVariants = [];
-
-probeBtn.addEventListener("click", async () => {
-  const url = form.url.value.trim();
-  if (!url) return alert("请先输入 M3U8 链接");
-  probeBtn.disabled = true;
-  probeBtn.textContent = "探测中...";
-  qualityWrap.style.display = "none";
-  lastVariants = [];
-  try {
-    const data = await api("/api/probe", {
-      method: "POST",
-      body: JSON.stringify({
-        url,
-        referer: form.referer.value,
-        cookie: form.cookie.value,
-      }),
-    });
-    if (data.variants && data.variants.length > 0) {
-      lastVariants = data.variants;
-      qualitySel.innerHTML =
-        `<option value="">原始链接（默认）</option>` +
-        data.variants
-          .map(
-            (v, i) =>
-              `<option value="${i}">${escapeHtml(v.label)}</option>`
-          )
-          .join("");
-      qualityWrap.style.display = "";
-    } else {
-      qualitySel.innerHTML = "";
-      qualityWrap.style.display = "none";
-      alert("未检测到多画质流，将使用原始链接下载");
-    }
-  } catch (e) {
-    alert("探测失败: " + e.message);
-  } finally {
-    probeBtn.disabled = false;
-    probeBtn.innerHTML =
-      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> 探测画质';
-  }
-});
-
-// ---------------------------------------------------------------------------
 // Submit job
 // ---------------------------------------------------------------------------
 
@@ -204,27 +155,16 @@ form.addEventListener("submit", async (event) => {
   submitBtn.innerHTML =
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> 提交中...';
   try {
-    let downloadUrl = form.url.value.trim();
-
-    // If a quality variant is selected, use that URL instead
-    const qi = qualitySel.value;
-    if (qi !== "" && lastVariants[parseInt(qi)]) {
-      downloadUrl = lastVariants[parseInt(qi)].url;
-    }
-
     await api("/api/jobs", {
       method: "POST",
       body: JSON.stringify({
-        url: downloadUrl,
+        url: form.url.value.trim(),
         name: form.name.value,
         referer: form.referer.value,
         cookie: form.cookie.value,
-        quality: qualitySel.options[qualitySel.selectedIndex]?.text || "",
       }),
     });
     form.url.value = "";
-    qualityWrap.style.display = "none";
-    lastVariants = [];
     await refreshJobs();
   } catch (e) {
     alert(e.message);
@@ -310,6 +250,7 @@ refreshBtn.addEventListener("click", refreshJobs);
 refreshHealth();
 refreshJobs();
 setInterval(refreshJobs, 2000);
+
 
 
 

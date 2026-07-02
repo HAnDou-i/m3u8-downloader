@@ -209,12 +209,7 @@ select {
   box-shadow: 0 4px 16px var(--accent-glow);
 }
 
-.btn-probe {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  color: var(--text-2);
-  width: 100%;
-}
+
 .btn-probe:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);
@@ -492,5 +487,6 @@ select {
   color: var(--text-2);
   font-size: 11px;
 }
+
 
 
