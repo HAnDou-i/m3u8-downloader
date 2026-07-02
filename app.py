@@ -289,29 +289,40 @@ def run_image_m3u8(job_id: str, segments: list, total_duration: float, output: P
     speed_time = time.time()
 
     for i, seg in enumerate(segments):
-        with jobs_lock:
-            job_state = jobs.get(job_id, {})
-            if job_state.get("cancel"):
-                append_log(job_id, "正在取消任务...")
-                shutil.rmtree(tmpdir, ignore_errors=True)
-                set_job(job_id, status="cancelled", percent=0, progress_text="已取消")
-                return
-            if job_state.get("paused"):
-                append_log(job_id, "任务已暂停")
-                shutil.rmtree(tmpdir, ignore_errors=True)
-                set_job(job_id, status="paused", progress_text="已暂停")
-                return
-
         img_path = tmpdir / f"frame_{i:05d}.jpeg"
         try:
             req = urllib.request.Request(seg["url"], headers=hdrs)
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                data = resp.read()
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                chunks = []
+                while True:
+                    # Check cancel/pause between chunks
+                    with jobs_lock:
+                        job_state = jobs.get(job_id, {})
+                        if job_state.get("cancel") or job_state.get("paused"):
+                            resp.close()
+                            is_paused = job_state.get("paused")
+                            shutil.rmtree(tmpdir, ignore_errors=True)
+                            if is_paused:
+                                append_log(job_id, "任务已暂停")
+                                set_job(job_id, status="paused", progress_text="已暂停")
+                            else:
+                                append_log(job_id, "正在取消任务...")
+                                set_job(job_id, status="cancelled", percent=0, progress_text="已取消")
+                            return
+                    chunk = resp.read(8192)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                data = b"".join(chunks)
                 img_path.write_bytes(data)
                 file_size = len(data)
             total_bytes += file_size
             downloaded.append(img_path)
         except Exception as e:
+            with jobs_lock:
+                if jobs.get(job_id, {}).get("cancel") or jobs.get(job_id, {}).get("paused"):
+                    shutil.rmtree(tmpdir, ignore_errors=True)
+                    return
             append_log(job_id, f"下载第 {i+1} 段失败: {str(e)[:60]}")
             continue
 
@@ -719,6 +730,7 @@ if __name__ == "__main__":
     print(f"[M3U8 Downloader] Download dir: {DOWNLOAD_DIR}")
     print(f"[M3U8 Downloader] FFmpeg: {FFMPEG}")
     app.run(host="0.0.0.0", port=port, threaded=True)
+
 
 
 
