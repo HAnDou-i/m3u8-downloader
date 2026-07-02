@@ -272,9 +272,25 @@ def run_image_m3u8(job_id: str, segments: list, total_duration: float, output: P
     import urllib.request
     import glob as globmod
 
-    tmpdir = Path(tempfile.mkdtemp(prefix="m3u8_img_"))
+    # Resume: reuse existing tmpdir if available
     total = len(segments)
-    append_log(job_id, f"检测到图片序列，共 {total} 段")
+    existing_tmpdir = None
+    existing_downloaded = 0
+    with jobs_lock:
+        job_data = jobs.get(job_id, {})
+        existing_tmpdir = job_data.get("_tmpdir")
+        existing_downloaded = job_data.get("_downloaded", 0)
+
+    if existing_tmpdir and Path(existing_tmpdir).exists():
+        tmpdir = Path(existing_tmpdir)
+        append_log(job_id, f"继续下载，已完成 {existing_downloaded}/{total} 段")
+    else:
+        tmpdir = Path(tempfile.mkdtemp(prefix="m3u8_img_"))
+        existing_downloaded = 0
+        append_log(job_id, f"检测到图片序列，共 {total} 段")
+
+    # Clear resume data
+    set_job(job_id, _tmpdir=None, _downloaded=0)
 
     hdrs = {"User-Agent": user_agent()}
     if referer:
@@ -290,6 +306,15 @@ def run_image_m3u8(job_id: str, segments: list, total_duration: float, output: P
 
     for i, seg in enumerate(segments):
         img_path = tmpdir / f"frame_{i:05d}.jpeg"
+        # Skip already downloaded frames (resume support)
+        if i < existing_downloaded and img_path.exists():
+            file_size = img_path.stat().st_size
+            total_bytes += file_size
+            downloaded.append(img_path)
+            pct = round((i + 1) / total * 100, 1)
+            set_job(job_id, percent=pct, progress_text=f"跳过已下载 {i+1}/{total}")
+            continue
+
         try:
             req = urllib.request.Request(seg["url"], headers=hdrs)
             with urllib.request.urlopen(req, timeout=10) as resp:
@@ -305,11 +330,13 @@ def run_image_m3u8(job_id: str, segments: list, total_duration: float, output: P
                             is_paused = job_state.get("paused")
                     if should_stop:
                         resp.close()
-                        shutil.rmtree(tmpdir, ignore_errors=True)
                         if is_paused:
-                            set_job(job_id, status="paused", progress_text="已暂停")
-                            append_log(job_id, "任务已暂停")
+                            # Save progress for resume
+                            set_job(job_id, status="paused", progress_text="已暂停",
+                                    _tmpdir=str(tmpdir), _downloaded=len(downloaded))
+                            append_log(job_id, f"任务已暂停（已下载 {len(downloaded)}/{total}）")
                         else:
+                            shutil.rmtree(tmpdir, ignore_errors=True)
                             set_job(job_id, status="cancelled", percent=0, progress_text="已取消")
                             append_log(job_id, "正在取消任务...")
                         return
@@ -328,7 +355,12 @@ def run_image_m3u8(job_id: str, segments: list, total_duration: float, output: P
                 if jobs.get(job_id, {}).get("cancel") or jobs.get(job_id, {}).get("paused"):
                     should_stop = True
             if should_stop:
-                shutil.rmtree(tmpdir, ignore_errors=True)
+                with jobs_lock:
+                    if jobs.get(job_id, {}).get("paused"):
+                        set_job(job_id, status="paused", progress_text="已暂停",
+                                _tmpdir=str(tmpdir), _downloaded=len(downloaded))
+                    else:
+                        shutil.rmtree(tmpdir, ignore_errors=True)
                 return
             append_log(job_id, f"下载第 {i+1} 段失败: {str(e)[:60]}")
             continue
@@ -737,6 +769,7 @@ if __name__ == "__main__":
     print(f"[M3U8 Downloader] Download dir: {DOWNLOAD_DIR}")
     print(f"[M3U8 Downloader] FFmpeg: {FFMPEG}")
     app.run(host="0.0.0.0", port=port, threaded=True)
+
 
 
 
