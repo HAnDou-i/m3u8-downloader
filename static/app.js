@@ -53,6 +53,18 @@ function escapeHtml(v) {
   );
 }
 
+function formatSpeed(speed) {
+  if (!speed) return "";
+  // speed from ffmpeg looks like "2.5x" or a number
+  const match = String(speed).match(/([\d.]+)\s*x/);
+  if (match) {
+    const x = parseFloat(match[1]);
+    if (x >= 1) return x.toFixed(1) + "x 实时";
+    return (x * 100).toFixed(0) + "% 实时";
+  }
+  return speed;
+}
+
 function timeAgo(ts) {
   if (!ts) return "";
   const diff = Math.floor((Date.now() / 1000) - ts);
@@ -84,16 +96,11 @@ function renderJobs(jobs) {
   jobsEl.innerHTML = jobs
     .map((job) => {
       const canDownload = job.status === "done";
-            const canCancel = job.status === "running" || job.status === "queued";
-      const canRetry = job.status === "error" || job.status === "cancelled" || job.status === "paused";
+      const canCancel = job.status === "running" || job.status === "queued";
       const canPause = job.status === "running" || job.status === "queued";
       const canResume = job.status === "paused";
-    
-      const canDelete =
-        job.status === "done" ||
-        job.status === "error" ||
-        job.status === "cancelled" ||
-        job.status === "paused";
+      const canRetry = job.status === "error" || job.status === "cancelled";
+      const canDelete = job.status === "done" || job.status === "error" || job.status === "cancelled" || job.status === "paused";
       const pct = Math.max(0, Math.min(100, job.percent || 0));
       const logs = (job.logs || [])
         .slice(-6)
@@ -107,7 +114,7 @@ function renderJobs(jobs) {
             <strong class="job-name">${escapeHtml(job.name)}</strong>
             <div class="job-meta">
               <span class="badge badge-${job.status}">${statusText(job.status)}</span>
-              ${job.speed ? `<span class="speed">${escapeHtml(job.speed)}</span>` : ""}
+              ${job.speed ? `<span class="speed">${escapeHtml(formatSpeed(job.speed))}</span>` : ""}
               ${job.size ? `<span class="size">${escapeHtml(job.size)}</span>` : ""}
               <span class="time">${timeAgo(job.created_at)}</span>
             </div>
@@ -117,54 +124,12 @@ function renderJobs(jobs) {
         <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
         <div class="progress-text">${escapeHtml(job.progress_text || "")}</div>
         <div class="actions">
-          ${
-            canDownload
-              ? `<a href="/downloads/${encodeURIComponent(job.name)}" class="btn btn-sm btn-download">
-                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                   下载文件
-                 </a>`
-              : ""
-          }
-          ${
-            canCancel
-              ? `<button data-cancel="${job.id}" class="btn btn-sm btn-cancel" type="button">
-                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-                   取消
-                 </button>`
-              : ""
-          }
-          ${
-            canDelete
-              ? `<button data-delete="${job.id}" class="btn btn-sm btn-ghost-danger" type="button">
-                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                   删除
-                 </button>`
-              : ""
-          }
-          ${
-            canPause
-              ? `<button data-pause="${job.id}" class="btn btn-sm btn-pause" type="button">
-                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                   暂停
-                 </button>`
-              : ""
-          }
-          ${
-            canRetry
-              ? `<button data-retry="${job.id}" class="btn btn-sm btn-retry" type="button">
-                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                   重试
-                 </button>`
-              : ""
-          }
-          ${
-            canResume
-              ? `<button data-resume="${job.id}" class="btn btn-sm btn-resume" type="button">
-                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                   继续下载
-                 </button>`
-              : ""
-          }
+          ${canDownload ? `<a href="/downloads/${encodeURIComponent(job.name)}" class="btn btn-sm btn-download"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 下载文件</a>` : ""}
+          ${canCancel ? `<button data-cancel="${job.id}" class="btn btn-sm btn-cancel" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg> 取消</button>` : ""}
+          ${canPause ? `<button data-pause="${job.id}" class="btn btn-sm btn-pause" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> 暂停</button>` : ""}
+          ${canResume ? `<button data-resume="${job.id}" class="btn btn-sm btn-resume" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> 继续</button>` : ""}
+          ${canRetry ? `<button data-retry="${job.id}" class="btn btn-sm btn-retry" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> 重试</button>` : ""}
+          ${canDelete ? `<button data-delete="${job.id}" class="btn btn-sm btn-ghost-danger" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> 删除</button>` : ""}
         </div>
         ${logs ? `<ul class="logs">${logs}</ul>` : ""}
       </article>`;
@@ -356,6 +321,7 @@ refreshBtn.addEventListener("click", refreshJobs);
 refreshHealth();
 refreshJobs();
 setInterval(refreshJobs, 2000);
+
 
 
 

@@ -267,7 +267,11 @@ def run_download(job_id: str):
             speed = ""
             speed_match = speed_re.search(line)
             if speed_match:
-                speed = speed_match.group(1) + "x"
+                speed_val = float(speed_match.group(1))
+                if speed_val >= 1:
+                    speed = f"{speed_val:.1f}x"
+                else:
+                    speed = f"{speed_val * 100:.0f}%"
             set_job(
                 job_id,
                 current=current,
@@ -504,6 +508,7 @@ if __name__ == "__main__":
     print(f"[M3U8 Downloader] Download dir: {DOWNLOAD_DIR}")
     print(f"[M3U8 Downloader] FFmpeg: {FFMPEG}")
     app.run(host="0.0.0.0", port=port, threaded=True)
+
 
 
 
