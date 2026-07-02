@@ -31,7 +31,7 @@ const STATUS_MAP = {
   running: "下载中",
   done: "已完成",
   error: "失败",
-  cancelled: "已取消",
+  cancelled: "已取消",`n  paused: "已暂停",
 };
 
 const STATUS_CLASS = {
@@ -39,7 +39,7 @@ const STATUS_CLASS = {
   running: "st-running",
   done: "st-done",
   error: "st-error",
-  cancelled: "st-cancelled",
+  cancelled: "st-cancelled",`n  paused: "st-paused",
 };
 
 function statusText(s) { return STATUS_MAP[s] || s; }
@@ -82,11 +82,13 @@ function renderJobs(jobs) {
   jobsEl.innerHTML = jobs
     .map((job) => {
       const canDownload = job.status === "done";
-      const canCancel = job.status === "running" || job.status === "queued";
+      const canCancel = job.status === "running" || job.status === "queued";const canRetry = job.status === "error" || job.status === "cancelled";
+    const canPause = job.status === "running" || job.status === "queued";
+    
       const canDelete =
         job.status === "done" ||
         job.status === "error" ||
-        job.status === "cancelled";
+        job.status === "cancelled" ||`n        job.status === "paused";
       const pct = Math.max(0, Math.min(100, job.percent || 0));
       const logs = (job.logs || [])
         .slice(-6)
@@ -265,6 +267,26 @@ jobsEl.addEventListener("click", async (event) => {
     await refreshJobs();
     return;
   }
+  const pauseBtn = event.target.closest("[data-pause]");
+  if (pauseBtn) {
+    pauseBtn.disabled = true;
+    await api(`/api/jobs/${pauseBtn.dataset.pause}/pause`, {
+      method: "POST",
+      body: "{}",
+    });
+    await refreshJobs();
+    return;
+  }
+  const retryBtn = event.target.closest("[data-retry]");
+  if (retryBtn) {
+    retryBtn.disabled = true;
+    await api(`/api/jobs/${retryBtn.dataset.retry}/retry`, {
+      method: "POST",
+      body: "{}",
+    });
+    await refreshJobs();
+    return;
+  }
   const deleteBtn = event.target.closest("[data-delete]");
   if (deleteBtn) {
     if (!confirm("确定删除此任务？")) return;
@@ -295,3 +317,4 @@ refreshBtn.addEventListener("click", refreshJobs);
 refreshHealth();
 refreshJobs();
 setInterval(refreshJobs, 2000);
+

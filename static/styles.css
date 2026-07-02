@@ -247,6 +247,27 @@ select {
 }
 .btn-cancel:hover { background: #f87171; }
 
+.btn-pause {
+  background: var(--warning, #f59e0b);
+  color: #000;
+}
+.btn-pause:hover { background: #fbbf24; }
+
+.btn-retry {
+  background: var(--accent);
+  color: #000;
+}
+.btn-retry:hover { background: #60a5fa; }
+
+.badge-paused {
+  background: #f59e0b;
+  color: #000;
+}
+
+.st-paused .bar-fill {
+  background: #f59e0b;
+}
+
 .btn-ghost-danger {
   background: transparent;
   color: var(--text-3);
@@ -465,3 +486,4 @@ select {
   color: var(--text-2);
   font-size: 11px;
 }
+

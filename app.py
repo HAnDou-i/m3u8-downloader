@@ -246,7 +246,7 @@ def run_download(job_id: str):
         for line in process.stderr:
             with jobs_lock:
                 cancelled = jobs.get(job_id, {}).get("cancel")
-            if cancelled:
+            if cancelled or jobs.get(job_id, {}).get("cancel"):
                 process.terminate()
                 append_log(job_id, "正在取消任务...")
                 break
@@ -277,7 +277,7 @@ def run_download(job_id: str):
         with jobs_lock:
             cancelled = jobs.get(job_id, {}).get("cancel")
 
-        if cancelled:
+        if cancelled or jobs.get(job_id, {}).get("cancel"):
             if output.exists():
                 output.unlink()
             set_job(job_id, status="cancelled", percent=0, progress_text="已取消")
@@ -365,7 +365,7 @@ def create_job():
             "speed": "",
             "size": "",
             "logs": [],
-            "cancel": False,
+            "cancel": False,`n            "paused": False,`n            "pid": None,
             "created_at": time.time(),
             "finished_at": None,
         }
@@ -390,6 +390,41 @@ def get_job(job_id):
             return jsonify({"error": "任务不存在"}), 404
         return jsonify(job)
 
+
+
+@app.post("/api/jobs/<job_id>/retry")
+def retry_job(job_id):
+    with jobs_lock:
+        job = jobs.get(job_id)
+        if not job:
+            return jsonify({"error": "任务不存在"}), 404
+        if job["status"] not in ("error", "cancelled"):
+            return jsonify({"error": "只能重试失败或已取消的任务"}), 400
+        # Reset job state
+        job["status"] = "queued"
+        job["percent"] = 0
+        job["progress_text"] = "排队中"
+        job["speed"] = ""
+        job["size"] = ""
+        job["cancel"] = False
+        job["paused"] = False
+        job["logs"] = []
+        job["finished_at"] = None
+    thread = threading.Thread(target=run_download, args=(job_id,), daemon=True)
+    thread.start()
+    return jsonify({"ok": True})
+
+
+@app.post("/api/jobs/<job_id>/pause")
+def pause_job(job_id):
+    with jobs_lock:
+        job = jobs.get(job_id)
+        if not job:
+            return jsonify({"error": "任务不存在"}), 404
+        if job["status"] not in ("running", "queued"):
+            return jsonify({"error": "只能暂停进行中的任务"}), 400
+        job["paused"] = True
+    return jsonify({"ok": True})
 
 @app.post("/api/jobs/<job_id>/cancel")
 def cancel_job(job_id):
@@ -444,3 +479,4 @@ if __name__ == "__main__":
     print(f"[M3U8 Downloader] Download dir: {DOWNLOAD_DIR}")
     print(f"[M3U8 Downloader] FFmpeg: {FFMPEG}")
     app.run(host="0.0.0.0", port=port, threaded=True)
+
