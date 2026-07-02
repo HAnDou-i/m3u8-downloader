@@ -365,7 +365,9 @@ def create_job():
             "speed": "",
             "size": "",
             "logs": [],
-            "cancel": False,`n            "paused": False,`n            "pid": None,
+            "cancel": False,
+            "paused": False,
+            "pid": None,
             "created_at": time.time(),
             "finished_at": None,
         }
@@ -479,4 +481,5 @@ if __name__ == "__main__":
     print(f"[M3U8 Downloader] Download dir: {DOWNLOAD_DIR}")
     print(f"[M3U8 Downloader] FFmpeg: {FFMPEG}")
     app.run(host="0.0.0.0", port=port, threaded=True)
+
 

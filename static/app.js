@@ -31,7 +31,8 @@ const STATUS_MAP = {
   running: "下载中",
   done: "已完成",
   error: "失败",
-  cancelled: "已取消",`n  paused: "已暂停",
+  cancelled: "已取消",
+  paused: "已暂停",
 };
 
 const STATUS_CLASS = {
@@ -39,7 +40,8 @@ const STATUS_CLASS = {
   running: "st-running",
   done: "st-done",
   error: "st-error",
-  cancelled: "st-cancelled",`n  paused: "st-paused",
+  cancelled: "st-cancelled",
+  paused: "st-paused",
 };
 
 function statusText(s) { return STATUS_MAP[s] || s; }
@@ -88,7 +90,8 @@ function renderJobs(jobs) {
       const canDelete =
         job.status === "done" ||
         job.status === "error" ||
-        job.status === "cancelled" ||`n        job.status === "paused";
+        job.status === "cancelled" ||
+        job.status === "paused";
       const pct = Math.max(0, Math.min(100, job.percent || 0));
       const logs = (job.logs || [])
         .slice(-6)
@@ -317,4 +320,5 @@ refreshBtn.addEventListener("click", refreshJobs);
 refreshHealth();
 refreshJobs();
 setInterval(refreshJobs, 2000);
+
 
